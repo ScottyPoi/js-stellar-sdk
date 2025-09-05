@@ -1,18 +1,24 @@
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import * as StellarSdk from '../../../../lib'
+
 const { Horizon } = StellarSdk;
 
-describe("ClaimableBalanceCallBuilder", function () {
-  beforeEach(function () {
-    this.server = new Horizon.Server("https://horizon-live.stellar.org:1337");
-    this.axiosMock = sinon.mock(Horizon.AxiosClient);
+describe("ClaimableBalanceCallBuilder", () => {
+  let server: StellarSdk.Horizon.Server;
+  let axiosMock: any;
+
+  beforeEach(() => {
+    server = new Horizon.Server("https://horizon-live.stellar.org:1337");
+    axiosMock = vi.spyOn(Horizon.AxiosClient, 'get').mockResolvedValue({} as any);
+    vi.spyOn(Horizon.AxiosClient, 'post').mockResolvedValue({} as any);
     StellarSdk.Config.setDefault();
   });
 
-  afterEach(function () {
-    this.axiosMock.verify();
-    this.axiosMock.restore();
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
-  it("requests the correct endpoint", function (done) {
+  it("requests the correct endpoint", async () => {
     let singleBalanceResponse = {
       _links: {
         self: {
@@ -37,31 +43,31 @@ describe("ClaimableBalanceCallBuilder", function () {
         "38888-00000000929b20b72e5890ab51c24f1cc46fa01c4f318d8d33367d24dd614cfdf5491072",
     };
 
-    this.axiosMock
-      .expects("get")
-      .withArgs(
-        sinon.match(
-          "https://horizon-live.stellar.org:1337/claimable_balances/00000000929b20b72e5890ab51c24f1cc46fa01c4f318d8d33367d24dd614cfdf5491072",
-        ),
-      )
-      .returns(Promise.resolve({ data: singleBalanceResponse }));
+    vi.spyOn(Horizon.AxiosClient, 'get')
+      .mockImplementation((url) => {
+        if (url.includes("https://horizon-live.stellar.org:1337/claimable_balances/00000000929b20b72e5890ab51c24f1cc46fa01c4f318d8d33367d24dd614cfdf5491072")) {
+          return Promise.resolve({ 
+            data: singleBalanceResponse,
+            status: 200,
+            statusText: 'OK',
+            headers: {},
+            config: {}
+          });
+        }
+        return Promise.reject(new Error('Unexpected URL'));
+      });
 
-    this.server
+    const response = await server
       .claimableBalances()
       .claimableBalance(
         "00000000929b20b72e5890ab51c24f1cc46fa01c4f318d8d33367d24dd614cfdf5491072",
       )
-      .call()
-      .then(function (response) {
-        expect(response).to.be.deep.equal(singleBalanceResponse);
-        done();
-      })
-      .catch(function (err) {
-        done(err);
-      });
+      .call();
+    
+    expect(response).toEqual(singleBalanceResponse);
   });
 
-  it('adds a "sponsor" query to the endpoint', function (done) {
+  it('adds a "sponsor" query to the endpoint', async () => {
     const data = {
       _links: {
         self: {
@@ -79,30 +85,30 @@ describe("ClaimableBalanceCallBuilder", function () {
       },
     };
 
-    this.axiosMock
-      .expects("get")
-      .withArgs(
-        sinon.match(
-          "https://horizon-live.stellar.org:1337/claimable_balances?sponsor=GDGQVOKHW4VEJRU2TETD6DBRKEO5ERCNF353LW5WBFW3JJWQ2BRQ6KDD",
-        ),
-      )
-      .returns(Promise.resolve({ data }));
+    vi.spyOn(Horizon.AxiosClient, 'get')
+      .mockImplementation((url) => {
+        if (url.includes("https://horizon-live.stellar.org:1337/claimable_balances?sponsor=GDGQVOKHW4VEJRU2TETD6DBRKEO5ERCNF353LW5WBFW3JJWQ2BRQ6KDD")) {
+          return Promise.resolve({ 
+            data,
+            status: 200,
+            statusText: 'OK',
+            headers: {},
+            config: {}
+          });
+        }
+        return Promise.reject(new Error('Unexpected URL'));
+      });
 
-    this.server
+    const response = await server
       .claimableBalances()
       .sponsor("GDGQVOKHW4VEJRU2TETD6DBRKEO5ERCNF353LW5WBFW3JJWQ2BRQ6KDD")
-      .call()
-      .then(function (response) {
-        expect(response.next).to.be.a("function");
-        expect(response.prev).to.be.a("function");
-        done();
-      })
-      .catch(function (err) {
-        done(err);
-      });
+      .call();
+    
+    expect(response.next).toBeTypeOf("function");
+    expect(response.prev).toBeTypeOf("function");
   });
 
-  it('adds a "claimant" query to the endpoint', function (done) {
+  it('adds a "claimant" query to the endpoint', async () => {
     const data = {
       _links: {
         self: {
@@ -120,30 +126,30 @@ describe("ClaimableBalanceCallBuilder", function () {
       },
     };
 
-    this.axiosMock
-      .expects("get")
-      .withArgs(
-        sinon.match(
-          "https://horizon-live.stellar.org:1337/claimable_balances?claimant=GDGQVOKHW4VEJRU2TETD6DBRKEO5ERCNF353LW5WBFW3JJWQ2BRQ6KDD",
-        ),
-      )
-      .returns(Promise.resolve({ data }));
+    vi.spyOn(Horizon.AxiosClient, 'get')
+      .mockImplementation((url) => {
+        if (url.includes("https://horizon-live.stellar.org:1337/claimable_balances?claimant=GDGQVOKHW4VEJRU2TETD6DBRKEO5ERCNF353LW5WBFW3JJWQ2BRQ6KDD")) {
+          return Promise.resolve({ 
+            data,
+            status: 200,
+            statusText: 'OK',
+            headers: {},
+            config: {}
+          });
+        }
+        return Promise.reject(new Error('Unexpected URL'));
+      });
 
-    this.server
+    const response = await server
       .claimableBalances()
       .claimant("GDGQVOKHW4VEJRU2TETD6DBRKEO5ERCNF353LW5WBFW3JJWQ2BRQ6KDD")
-      .call()
-      .then(function (response) {
-        expect(response.next).to.be.a("function");
-        expect(response.prev).to.be.a("function");
-        done();
-      })
-      .catch(function (err) {
-        done(err);
-      });
+      .call();
+    
+    expect(response.next).toBeTypeOf("function");
+    expect(response.prev).toBeTypeOf("function");
   });
 
-  it('adds an "asset" query to the endpoint', function (done) {
+  it('adds an "asset" query to the endpoint', async () => {
     const data = {
       _links: {
         self: {
@@ -161,16 +167,21 @@ describe("ClaimableBalanceCallBuilder", function () {
       },
     };
 
-    this.axiosMock
-      .expects("get")
-      .withArgs(
-        sinon.match(
-          "https://horizon-live.stellar.org:1337/claimable_balances?asset=USD%3AGDGQVOKHW4VEJRU2TETD6DBRKEO5ERCNF353LW5WBFW3JJWQ2BRQ6KDD",
-        ),
-      )
-      .returns(Promise.resolve({ data }));
+    vi.spyOn(Horizon.AxiosClient, 'get')
+      .mockImplementation((url) => {
+        if (url.includes("https://horizon-live.stellar.org:1337/claimable_balances?asset=USD%3AGDGQVOKHW4VEJRU2TETD6DBRKEO5ERCNF353LW5WBFW3JJWQ2BRQ6KDD")) {
+          return Promise.resolve({ 
+            data,
+            status: 200,
+            statusText: 'OK',
+            headers: {},
+            config: {}
+          });
+        }
+        return Promise.reject(new Error('Unexpected URL'));
+      });
 
-    this.server
+    const response = await server
       .claimableBalances()
       .asset(
         new StellarSdk.Asset(
@@ -178,14 +189,9 @@ describe("ClaimableBalanceCallBuilder", function () {
           "GDGQVOKHW4VEJRU2TETD6DBRKEO5ERCNF353LW5WBFW3JJWQ2BRQ6KDD",
         ),
       )
-      .call()
-      .then(function (response) {
-        expect(response.next).to.be.a("function");
-        expect(response.prev).to.be.a("function");
-        done();
-      })
-      .catch(function (err) {
-        done(err);
-      });
+      .call();
+    
+    expect(response.next).toBeTypeOf("function");
+    expect(response.prev).toBeTypeOf("function");
   });
 });
