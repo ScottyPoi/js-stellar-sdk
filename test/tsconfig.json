@@ -17,12 +17,13 @@
       }
     },
     "include": [
-      "**/*.ts", 
+      "./unit/**.ts", 
+      "./test-nodejs.ts",
+      "./test-browser.ts"
+
     ],
     "exclude": [
       "out/**/*",
       "node_modules/**/*",
-      "test-nodejs.ts",
-      "test-browser.ts"
     ]
   }
