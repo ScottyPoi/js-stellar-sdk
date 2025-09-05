@@ -1,22 +1,28 @@
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import * as StellarSdk from '../../lib'
+
 const { Horizon } = StellarSdk;
 
 const BASE_URL = "https://horizon-live.stellar.org:1337";
 const LP_URL = BASE_URL + "/liquidity_pools";
 
-describe("/liquidity_pools tests", function () {
-  beforeEach(function () {
-    this.server = new Horizon.Server(BASE_URL);
-    this.axiosMock = sinon.mock(Horizon.AxiosClient);
+describe("/liquidity_pools tests", () => {
+  let server: any;
+  let axiosMock: any;
+
+  beforeEach(() => {
+    server = new Horizon.Server(BASE_URL);
+    axiosMock = vi.spyOn(Horizon.AxiosClient, 'get').mockResolvedValue({} as any);
+    vi.spyOn(Horizon.AxiosClient, 'post').mockResolvedValue({} as any);
     StellarSdk.Config.setDefault();
   });
 
-  afterEach(function () {
-    this.axiosMock.verify();
-    this.axiosMock.restore();
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
-  it("can create a LiquidityPoolCallBuilder", function () {
-    expect(this.server.liquidityPools()).not.to.be.undefined;
+  it("can create a LiquidityPoolCallBuilder", () => {
+    expect(server.liquidityPools()).toBeDefined();
   });
 
   const rootResponse = {
@@ -92,23 +98,28 @@ describe("/liquidity_pools tests", function () {
     "GAP5LETOV6YIE62YAM56STDANPRDO7ZFDBGSNHJQIYGGKSMOZAHOOS2S",
   );
 
-  it("returns the right root response", function (done) {
-    this.axiosMock
-      .expects("get")
-      .withArgs(sinon.match(LP_URL))
-      .returns(Promise.resolve({ data: rootResponse }));
+  it("returns the right root response", async () => {
+    vi.spyOn(Horizon.AxiosClient, 'get')
+      .mockImplementation((url) => {
+        if (url.includes(LP_URL)) {
+          return Promise.resolve({
+            data: rootResponse,
+            headers: {},
+            config: {},
+            status: 200,
+            statusText: "OK",
+          });
+        }
+        return Promise.reject(new Error('Unexpected URL'));
+      });
 
-    this.server
+    const pools = await server
       .liquidityPools()
-      .call()
-      .then((pools) => {
-        expect(pools.records).to.deep.equal(rootResponse._embedded.records);
-        done();
-      })
-      .catch(done);
+      .call();
+    expect(pools.records).toEqual(rootResponse._embedded.records);
   });
 
-  describe("filters", function () {
+  describe("filters", () => {
     const testCases = [
       {
         assets: [StellarSdk.Asset.native()],
@@ -136,62 +147,58 @@ describe("/liquidity_pools tests", function () {
         .map((asset) => asset.getCode())
         .join(" + ");
 
-      it("filters by asset(s) " + description, function (done) {
-        this.axiosMock
-          .expects("get")
-          .withArgs(
-            sinon.match(`${LP_URL}?reserves=${encodeURIComponent(queryStr)}`),
-          )
-          .returns(Promise.resolve({ data: testCase.response }));
+      it("filters by asset(s) " + description, async () => {
+        vi.spyOn(Horizon.AxiosClient, 'get')
+          .mockImplementation((url) => {
+            if (url.includes(`${LP_URL}?reserves=${encodeURIComponent(queryStr)}`)) {
+              return Promise.resolve({ data: testCase.response } as any);
+            }
+            return Promise.reject(new Error('Unexpected URL'));
+          });
 
-        this.server
+        const pools = await server
           .liquidityPools()
           .forAssets(...testCase.assets)
-          .call()
-          .then((pools) => {
-            expect(pools.records).to.deep.equal(
-              testCase.response._embedded.records,
-            );
-            done();
-          })
-          .catch(done);
+          .call();
+        expect(pools.records).toEqual(
+          testCase.response._embedded.records,
+        );
       });
     });
 
-    it("filters by account", function (done) {
+    it("filters by account", async () => {
       const accountId =
         "GAP5LETOV6YIE62YAM56STDANPRDO7ZFDBGSNHJQIYGGKSMOZAHOOS2S";
-      this.axiosMock
-        .expects("get")
-        .withArgs(sinon.match(`${LP_URL}?account=${accountId}`))
-        .returns(Promise.resolve({ data: rootResponse }));
+      vi.spyOn(Horizon.AxiosClient, 'get')
+        .mockImplementation((url) => {
+          if (url.includes(`${LP_URL}?account=${accountId}`)) {
+            return Promise.resolve({ data: rootResponse } as any);
+          }
+          return Promise.reject(new Error('Unexpected URL'));
+        });
 
-      this.server
+      const pools = await server
         .liquidityPools()
         .forAccount(accountId)
-        .call()
-        .then((pools) => {
-          expect(pools.records).to.deep.equal(rootResponse._embedded.records);
-          done();
-        })
-        .catch(done);
+        .call();
+      expect(pools.records).toEqual(rootResponse._embedded.records);
     });
   });
 
-  describe("querying a specific pool", function () {
+  describe("querying a specific pool", () => {
     const lpId =
       "ae44a51f6191ce24414fbd1326e93ccb0ae656f07fc1e37602b11d0802f74b9a";
 
-    it("checks for valid IDs", function () {
+    it("checks for valid IDs", () => {
       expect(() =>
-        this.server.liquidityPools().liquidityPoolId("nonsense"),
-      ).to.throw();
+        server.liquidityPools().liquidityPoolId("nonsense"),
+      ).toThrow();
       expect(() =>
-        this.server.liquidityPools().liquidityPoolId(lpId),
-      ).not.to.throw();
+        server.liquidityPools().liquidityPoolId(lpId),
+      ).not.toThrow();
     });
 
-    it("filters by specific ID", function (done) {
+    it("filters by specific ID", async () => {
       const poolResponse = {
         id: lpId,
         paging_token: "113725249324879873",
@@ -213,20 +220,19 @@ describe("/liquidity_pools tests", function () {
         ],
       };
 
-      this.axiosMock
-        .expects("get")
-        .withArgs(sinon.match(`${LP_URL}/${lpId}`))
-        .returns(Promise.resolve({ data: poolResponse }));
+      vi.spyOn(Horizon.AxiosClient, 'get')
+        .mockImplementation((url) => {
+          if (url.includes(`${LP_URL}/${lpId}`)) {
+            return Promise.resolve({ data: poolResponse } as any);
+          }
+          return Promise.reject(new Error('Unexpected URL'));
+        });
 
-      this.server
+      const pool = await server
         .liquidityPools()
         .liquidityPoolId(lpId)
-        .call()
-        .then((pool) => {
-          expect(pool).to.deep.equal(poolResponse);
-          done();
-        })
-        .catch(done);
+        .call();
+      expect(pool).toEqual(poolResponse);
     });
 
     const poolOpsResponse = {
@@ -374,23 +380,22 @@ describe("/liquidity_pools tests", function () {
       },
     };
 
-    it("retrieves its operations", function (done) {
-      this.axiosMock
-        .expects("get")
-        .withArgs(sinon.match(`${LP_URL}/${lpId}/operations`))
-        .returns(Promise.resolve({ data: poolOpsResponse }));
+    it("retrieves its operations", async () => {
+      vi.spyOn(Horizon.AxiosClient, 'get')
+        .mockImplementation((url) => {
+          if (url.includes(`${LP_URL}/${lpId}/operations`)) {
+            return Promise.resolve({ data: poolOpsResponse } as any);
+          }
+          return Promise.reject(new Error('Unexpected URL'));
+        });
 
-      this.server
+      const result = await server
         .operations()
         .forLiquidityPool(lpId)
-        .call()
-        .then((poolOps) => {
-          expect(poolOps.records).to.deep.equal(
-            poolOpsResponse._embedded.records,
-          );
-          done();
-        })
-        .catch(done);
+        .call();
+      expect(result.records).toEqual(
+        poolOpsResponse._embedded.records,
+      );
     });
 
     const poolTxsResponse = {
@@ -466,23 +471,22 @@ describe("/liquidity_pools tests", function () {
       },
     };
 
-    it("retrieves its transactions", function (done) {
-      this.axiosMock
-        .expects("get")
-        .withArgs(sinon.match(`${LP_URL}/${lpId}/transactions`))
-        .returns(Promise.resolve({ data: poolTxsResponse }));
+    it("retrieves its transactions", async () => {
+      vi.spyOn(Horizon.AxiosClient, 'get')
+        .mockImplementation((url) => {
+          if (url.includes(`${LP_URL}/${lpId}/transactions`)) {
+            return Promise.resolve({ data: poolTxsResponse } as any);
+          }
+          return Promise.reject(new Error('Unexpected URL'));
+        });
 
-      this.server
+      const result = await server
         .transactions()
         .forLiquidityPool(lpId)
-        .call()
-        .then((poolTxs) => {
-          expect(poolTxs.records).to.deep.equal(
-            poolTxsResponse._embedded.records,
-          );
-          done();
-        })
-        .catch(done);
+        .call();
+      expect(result.records).toEqual(
+        poolTxsResponse._embedded.records,
+      );
     });
 
     const poolEffectsResponse = {
@@ -742,23 +746,22 @@ describe("/liquidity_pools tests", function () {
       },
     };
 
-    it("retrieves its effects", function (done) {
-      this.axiosMock
-        .expects("get")
-        .withArgs(sinon.match(`${LP_URL}/${lpId}/effects`))
-        .returns(Promise.resolve({ data: poolEffectsResponse }));
+    it("retrieves its effects", async () => {
+      vi.spyOn(Horizon.AxiosClient, 'get')
+        .mockImplementation((url) => {
+          if (url.includes(`${LP_URL}/${lpId}/effects`)) {
+            return Promise.resolve({ data: poolEffectsResponse } as any);
+          }
+          return Promise.reject(new Error('Unexpected URL'));
+        });
 
-      this.server
+      const result = await server
         .effects()
         .forLiquidityPool(lpId)
-        .call()
-        .then((poolEffects) => {
-          expect(poolEffects.records).to.deep.equal(
-            poolEffectsResponse._embedded.records,
-          );
-          done();
-        })
-        .catch(done);
+        .call();
+      expect(result.records).toEqual(
+        poolEffectsResponse._embedded.records,
+      );
     });
 
     const poolTradesResponse = {
@@ -818,27 +821,26 @@ describe("/liquidity_pools tests", function () {
       },
     };
 
-    it("retrieves its trades", function (done) {
-      this.axiosMock
-        .expects("get")
-        .withArgs(sinon.match(`${LP_URL}/${lpId}/trades`))
-        .returns(Promise.resolve({ data: poolTradesResponse }));
+    it("retrieves its trades", async () => {
+      vi.spyOn(Horizon.AxiosClient, 'get')
+        .mockImplementation((url) => {
+          if (url.includes(`${LP_URL}/${lpId}/trades`)) {
+            return Promise.resolve({ data: poolTradesResponse } as any);
+          }
+          return Promise.reject(new Error('Unexpected URL'));
+        });
 
-      this.server
+      const result = await server
         .trades()
         .forLiquidityPool(lpId)
-        .call()
-        .then((poolTrades) => {
-          expect(poolTrades.records).to.deep.equal(
-            poolTradesResponse._embedded.records,
-          );
-          done();
-        })
-        .catch(done);
+        .call();
+      expect(result.records).toEqual(
+        poolTradesResponse._embedded.records,
+      );
     });
   });
 
-  describe("querying a specific pool", function () {
+  describe("querying a specific pool", () => {
     const lpId =
       "ae44a51f6191ce24414fbd1326e93ccb0ae656f07fc1e37602b11d0802f74b9a";
 
@@ -985,23 +987,22 @@ describe("/liquidity_pools tests", function () {
       },
     };
 
-    it("retrieves its operations", function (done) {
-      this.axiosMock
-        .expects("get")
-        .withArgs(sinon.match(`${LP_URL}/${lpId}/operations`))
-        .returns(Promise.resolve({ data: poolOpsResponse }));
+    it("retrieves its operations", async () => {
+      vi.spyOn(Horizon.AxiosClient, 'get')
+        .mockImplementation((url) => {
+          if (url.includes(`${LP_URL}/${lpId}/operations`)) {
+            return Promise.resolve({ data: poolOpsResponse } as any);
+          }
+          return Promise.reject(new Error('Unexpected URL'));
+        });
 
-      this.server
+      const result = await server
         .operations()
         .forLiquidityPool(lpId)
-        .call()
-        .then((poolOps) => {
-          expect(poolOps.records).to.deep.equal(
-            poolOpsResponse._embedded.records,
-          );
-          done();
-        })
-        .catch(done);
+        .call();
+      expect(result.records).toEqual(
+        poolOpsResponse._embedded.records,
+      );
     });
 
     const poolTxsResponse = {
@@ -1077,23 +1078,22 @@ describe("/liquidity_pools tests", function () {
       },
     };
 
-    it("retrieves its transactions", function (done) {
-      this.axiosMock
-        .expects("get")
-        .withArgs(sinon.match(`${LP_URL}/${lpId}/transactions`))
-        .returns(Promise.resolve({ data: poolTxsResponse }));
+    it("retrieves its transactions", async () => {
+      vi.spyOn(Horizon.AxiosClient, 'get')
+        .mockImplementation((url) => {
+          if (url.includes(`${LP_URL}/${lpId}/transactions`)) {
+            return Promise.resolve({ data: poolTxsResponse } as any);
+          }
+          return Promise.reject(new Error('Unexpected URL'));
+        });
 
-      this.server
+      const result = await server
         .transactions()
         .forLiquidityPool(lpId)
-        .call()
-        .then((poolTxs) => {
-          expect(poolTxs.records).to.deep.equal(
-            poolTxsResponse._embedded.records,
-          );
-          done();
-        })
-        .catch(done);
+        .call();
+      expect(result.records).toEqual(
+        poolTxsResponse._embedded.records,
+      );
     });
 
     const poolFxsResponse = {
@@ -1353,23 +1353,22 @@ describe("/liquidity_pools tests", function () {
       },
     };
 
-    it("retrieves its effects", function (done) {
-      this.axiosMock
-        .expects("get")
-        .withArgs(sinon.match(`${LP_URL}/${lpId}/effects`))
-        .returns(Promise.resolve({ data: poolFxsResponse }));
+    it("retrieves its effects", async () => {
+      vi.spyOn(Horizon.AxiosClient, 'get')
+        .mockImplementation((url) => {
+          if (url.includes(`${LP_URL}/${lpId}/effects`)) {
+            return Promise.resolve({ data: poolFxsResponse } as any);
+          }
+          return Promise.reject(new Error('Unexpected URL'));
+        });
 
-      this.server
+      const result = await server
         .effects()
         .forLiquidityPool(lpId)
-        .call()
-        .then((poolFxs) => {
-          expect(poolFxs.records).to.deep.equal(
-            poolFxsResponse._embedded.records,
-          );
-          done();
-        })
-        .catch(done);
+        .call();
+      expect(result.records).toEqual(
+        poolFxsResponse._embedded.records,
+      );
     });
   });
 });
