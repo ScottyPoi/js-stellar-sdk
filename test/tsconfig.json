@@ -1,0 +1,28 @@
+{
+    "extends": "@stellar/tsconfig",
+    "compilerOptions": {
+      "declaration": false,
+      "removeComments": false,
+      "lib": ["ES2020", "DOM"],
+      "moduleResolution": "node",
+      "target": "ES2020",
+      "strict": false,
+      "allowSyntheticDefaultImports": true,
+      "esModuleInterop": true,
+      "skipLibCheck": true,
+      "types": ["vitest/globals", "node"],
+      "baseUrl": ".",
+      "paths": {
+        "@/*": ["../src/*"]
+      }
+    },
+    "include": [
+      "**/*.ts", 
+    ],
+    "exclude": [
+      "out/**/*",
+      "node_modules/**/*",
+      "test-nodejs.ts",
+      "test-browser.ts"
+    ]
+  }
