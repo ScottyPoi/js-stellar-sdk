@@ -1,20 +1,25 @@
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import * as StellarSdk from '../../lib'
+
 const { Horizon } = StellarSdk;
 
-describe("horizon path tests", function () {
-  beforeEach(function () {
-    this.axiosMock = sinon.mock(Horizon.AxiosClient);
+describe("horizon path tests", () => {
+  let axiosMock: any;
+
+  beforeEach(() => {
+    axiosMock = vi.spyOn(Horizon.AxiosClient, 'get').mockResolvedValue({} as any);
+    vi.spyOn(Horizon.AxiosClient, 'post').mockResolvedValue({} as any);
     StellarSdk.Config.setDefault();
   });
 
-  afterEach(function () {
-    this.axiosMock.verify();
-    this.axiosMock.restore();
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   function test_horizon_paths(serverUrl) {
     let server = new Horizon.Server(serverUrl);
 
-    let randomResult = {
+    let randomResult: any = {
       data: {
         url: serverUrl,
         random: Math.round(1000 * Math.random()),
@@ -22,105 +27,108 @@ describe("horizon path tests", function () {
       },
     };
 
-    function prepareAxios(axiosMock, endpoint) {
+    function prepareAxios(mockMethod: 'get' | 'post', endpoint: string, postData?: string) {
       randomResult.endpoint = endpoint;
-      axiosMock
-        .expects("get")
-        .withArgs(sinon.match(serverUrl + endpoint))
-        .returns(Promise.resolve(randomResult));
+      if (mockMethod === 'get') {
+        vi.spyOn(Horizon.AxiosClient, 'get')
+          .mockImplementation((url) => {
+            if (url.includes(serverUrl + endpoint)) {
+              return Promise.resolve(randomResult);
+            }
+            return Promise.reject(new Error('Unexpected URL'));
+          });
+      } else if (mockMethod === 'post') {
+        vi.spyOn(Horizon.AxiosClient, 'post')
+          .mockImplementation((url, data) => {
+            if (url.includes(serverUrl + endpoint) && (!postData || data?.includes(postData))) {
+              return Promise.resolve(randomResult);
+            }
+            return Promise.reject(new Error('Unexpected URL or data'));
+          });
+      }
     }
 
-    it("server.accounts() " + serverUrl, function (done) {
-      prepareAxios(this.axiosMock, "/accounts");
-      server
-        .accounts()
-        .call()
-        .should.eventually.deep.equal(randomResult.data)
-        .notify(done);
+    it("server.accounts() " + serverUrl, async () => {
+      prepareAxios('get', "/accounts");
+      const result = await server.accounts().call();
+      expect(result).toEqual(randomResult.data);
     });
 
     it(
       "server.accounts().accountId('fooAccountId') " + serverUrl,
-      function (done) {
-        prepareAxios(this.axiosMock, "/accounts/fooAccountId");
-        server
+      async () => {
+        prepareAxios('get', "/accounts/fooAccountId");
+        const result = await server
           .accounts()
           .accountId("fooAccountId")
-          .call()
-          .should.eventually.deep.equal(randomResult.data)
-          .notify(done);
+          .call();
+        expect(result).toEqual(randomResult.data);
       },
     );
 
-    it("server.transactions() " + serverUrl, function (done) {
-      prepareAxios(this.axiosMock, "/transactions");
-      server
+    it("server.transactions() " + serverUrl, async () => {
+      prepareAxios('get', "/transactions");
+      const result = await server
         .transactions()
-        .call()
-        .should.eventually.deep.equal(randomResult.data)
-        .notify(done);
+        .call();
+      expect(result).toEqual(randomResult.data);
     });
 
     it(
       "server.transactions().includeFailed(true) " + serverUrl,
-      function (done) {
-        prepareAxios(this.axiosMock, "/transactions?include_failed=true");
-        server
+      async () => {
+        prepareAxios('get', "/transactions?include_failed=true");
+        const result = await server
           .transactions()
           .includeFailed(true)
-          .call()
-          .should.eventually.deep.equal(randomResult.data)
-          .notify(done);
+          .call();
+        expect(result).toEqual(randomResult.data);
       },
     );
 
-    it("server.operations().includeFailed(true) " + serverUrl, function (done) {
-      prepareAxios(this.axiosMock, "/operations?include_failed=true");
-      server
+    it("server.operations().includeFailed(true) " + serverUrl, async () => {
+      prepareAxios('get', "/operations?include_failed=true");
+      const result = await server
         .operations()
         .includeFailed(true)
-        .call()
-        .should.eventually.deep.equal(randomResult.data)
-        .notify(done);
+        .call();
+      expect(result).toEqual(randomResult.data);
     });
 
-    it("server.payments().includeFailed(true) " + serverUrl, function (done) {
-      prepareAxios(this.axiosMock, "/payments?include_failed=true");
-      server
+    it("server.payments().includeFailed(true) " + serverUrl, async () => {
+      prepareAxios('get', "/payments?include_failed=true");
+      const result = await server
         .payments()
         .includeFailed(true)
-        .call()
-        .should.eventually.deep.equal(randomResult.data)
-        .notify(done);
+        .call();
+      expect(result).toEqual(randomResult.data);
     });
 
     it(
       "server.transactions().transaction('fooTransactionId') " + serverUrl,
-      function (done) {
-        prepareAxios(this.axiosMock, "/transactions/fooTransactionId");
-        server
+      async () => {
+        prepareAxios('get', "/transactions/fooTransactionId");
+        const result = await server
           .transactions()
           .transaction("fooTransactionId")
-          .call()
-          .should.eventually.deep.equal(randomResult.data)
-          .notify(done);
+          .call();
+        expect(result).toEqual(randomResult.data);
       },
     );
 
     it(
       "server.transactions().forAccount('fooAccountId') " + serverUrl,
-      function (done) {
-        prepareAxios(this.axiosMock, "/accounts/fooAccountId/transactions");
-        server
+      async () => {
+        prepareAxios('get', "/accounts/fooAccountId/transactions");
+        const result = await server
           .transactions()
           .forAccount("fooAccountId")
-          .call()
-          .should.eventually.deep.equal(randomResult.data)
-          .notify(done);
+          .call();
+        expect(result).toEqual(randomResult.data);
       },
     );
 
-    it("server.submitTransaction() " + serverUrl, function (done) {
+    it("server.submitTransaction() " + serverUrl, async () => {
       randomResult.endpoint = "post";
 
       let keypair = StellarSdk.Keypair.random();
@@ -130,7 +138,7 @@ describe("horizon path tests", function () {
       );
 
       let fakeTransaction = new StellarSdk.TransactionBuilder(account, {
-        fee: 100,
+        fee: "100",
         networkPassphrase: StellarSdk.Networks.TESTNET,
       })
         .addOperation(
@@ -147,15 +155,11 @@ describe("horizon path tests", function () {
         fakeTransaction.toEnvelope().toXDR().toString("base64"),
       );
 
-      this.axiosMock
-        .expects("post")
-        .withArgs(sinon.match(serverUrl + "/transactions", `tx=${tx}`))
-        .returns(Promise.resolve(randomResult));
+      prepareAxios('post', "/transactions", `tx=${tx}`);
 
-      server
-        .submitTransaction(fakeTransaction, { skipMemoRequiredCheck: true })
-        .should.eventually.deep.equal(randomResult.data)
-        .notify(done);
+      const result = await server
+        .submitTransaction(fakeTransaction, { skipMemoRequiredCheck: true });
+      expect(result).toEqual(randomResult.data);
     });
   }
 
