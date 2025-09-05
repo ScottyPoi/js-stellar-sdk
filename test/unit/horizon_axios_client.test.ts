@@ -1,15 +1,20 @@
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import * as StellarSdk from '../../lib'
+
 const { SERVER_TIME_MAP, getCurrentServerTime } = StellarSdk.Horizon;
 
 describe("getCurrentServerTime", () => {
-  let clock;
+  let clock: ReturnType<typeof vi.useFakeTimers>;
 
   beforeEach(() => {
     // set it to 50 seconds
-    clock = sinon.useFakeTimers(5050000);
+    clock = vi.useFakeTimers({
+      now: 5050000,
+    });
   });
 
   afterEach(() => {
-    clock.restore();
+    vi.useRealTimers();
   });
 
   it("returns null when the hostname hasn't been hit", () => {
@@ -17,7 +22,7 @@ describe("getCurrentServerTime", () => {
   });
 
   it("returns null when no time is available", () => {
-    SERVER_TIME_MAP.host = {};
+    SERVER_TIME_MAP.host = {} as any;
     expect(getCurrentServerTime("host")).to.be.null;
   });
 
