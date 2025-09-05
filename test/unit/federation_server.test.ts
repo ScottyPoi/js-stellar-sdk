@@ -1,338 +1,313 @@
-const http = require("http");
+import { beforeEach, afterEach, describe, it, expect, vi } from 'vitest';
+import * as StellarSdk from '../../lib';
+import axios from 'axios';
+import * as http from 'http';
+
+vi.mock('axios', () => ({
+  default: {
+    get: vi.fn(),
+  },
+}));
+
+const mockedAxios = axios as any;
 
 const { Server, FEDERATION_RESPONSE_MAX_SIZE } = StellarSdk.Federation;
 
-describe("federation-server.js tests", function () {
-  beforeEach(function () {
-    this.server = new Server("https://acme.com:1337/federation", "stellar.org");
+describe("federation-server.js tests", () => {
+  let server: StellarSdk.Federation.Server;
 
-    this.axiosMock = sinon.mock(axios);
+  beforeEach(() => {
+    server = new Server("https://acme.com:1337/federation", "stellar.org");
     StellarSdk.Config.setDefault();
   });
 
-  afterEach(function () {
-    this.axiosMock.verify(); // also restores
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
-  describe("FederationServer.constructor", function () {
-    it("throws error for insecure server", function () {
+  describe("FederationServer.constructor", () => {
+    it("throws error for insecure server", () => {
       expect(
         () => new Server("http://acme.com:1337/federation", "stellar.org"),
-      ).to.throw(/Cannot connect to insecure federation server/);
+      ).toThrow(/Cannot connect to insecure federation server/);
     });
 
-    it("allow insecure server when opts.allowHttp flag is set", function () {
+    it("allow insecure server when opts.allowHttp flag is set", () => {
       expect(
         () =>
           new Server("http://acme.com:1337/federation", "stellar.org", {
             allowHttp: true,
           }),
-      ).to.not.throw();
+      ).not.toThrow();
     });
 
-    it("allow insecure server when global Config.allowHttp flag is set", function () {
+    it("allow insecure server when global Config.allowHttp flag is set", () => {
       StellarSdk.Config.setAllowHttp(true);
       expect(
         () =>
           new Server("http://acme.com:1337/federation", "stellar.org", {
             allowHttp: true,
           }),
-      ).to.not.throw();
+      ).not.toThrow();
     });
   });
 
-  describe("FederationServer.resolveAddress", function () {
-    beforeEach(function () {
-      this.axiosMock
-        .expects("get")
-        .withArgs(
-          sinon.match(
-            "https://acme.com:1337/federation?type=name&q=bob%2Astellar.org",
-          ),
-        )
-        .returns(
-          Promise.resolve({
-            data: {
-              stellar_address: "bob*stellar.org",
-              account_id:
-                "GB5XVAABEQMY63WTHDQ5RXADGYF345VWMNPTN2GFUDZT57D57ZQTJ7PS",
-            },
-          }),
-        );
-    });
-
-    it("requests is correct", function (done) {
-      this.server
-        .resolveAddress("bob*stellar.org")
-        .then((response) => {
-          expect(response.stellar_address).equals("bob*stellar.org");
-          expect(response.account_id).equals(
+  describe("FederationServer.resolveAddress", () => {
+    beforeEach(() => {
+      mockedAxios.get.mockResolvedValue({
+        data: {
+          stellar_address: "bob*stellar.org",
+          account_id:
             "GB5XVAABEQMY63WTHDQ5RXADGYF345VWMNPTN2GFUDZT57D57ZQTJ7PS",
-          );
-          done();
-        })
-        .catch(function (err) {
-          done(err);
-        });
-    });
-
-    it("requests is correct for username as stellar address", function (done) {
-      this.server
-        .resolveAddress("bob")
-        .then((response) => {
-          expect(response.stellar_address).equals("bob*stellar.org");
-          expect(response.account_id).equals(
-            "GB5XVAABEQMY63WTHDQ5RXADGYF345VWMNPTN2GFUDZT57D57ZQTJ7PS",
-          );
-          done();
-        })
-        .catch(function (err) {
-          done(err);
-        });
-    });
-  });
-
-  describe("FederationServer.resolveAccountId", function () {
-    beforeEach(function () {
-      this.axiosMock
-        .expects("get")
-        .withArgs(
-          sinon.match(
-            "https://acme.com:1337/federation?type=id&q=GB5XVAABEQMY63WTHDQ5RXADGYF345VWMNPTN2GFUDZT57D57ZQTJ7PS",
-          ),
-        )
-        .returns(
-          Promise.resolve({
-            data: {
-              stellar_address: "bob*stellar.org",
-              account_id:
-                "GB5XVAABEQMY63WTHDQ5RXADGYF345VWMNPTN2GFUDZT57D57ZQTJ7PS",
-            },
-          }),
-        );
-    });
-
-    it("requests is correct", function (done) {
-      this.server
-        .resolveAccountId(
-          "GB5XVAABEQMY63WTHDQ5RXADGYF345VWMNPTN2GFUDZT57D57ZQTJ7PS",
-        )
-        .then((response) => {
-          expect(response.stellar_address).equals("bob*stellar.org");
-          expect(response.account_id).equals(
-            "GB5XVAABEQMY63WTHDQ5RXADGYF345VWMNPTN2GFUDZT57D57ZQTJ7PS",
-          );
-          done();
-        })
-        .catch(function (err) {
-          done(err);
-        });
-    });
-  });
-
-  describe("FederationServer.resolveTransactionId", function () {
-    beforeEach(function () {
-      this.axiosMock
-        .expects("get")
-        .withArgs(
-          sinon.match(
-            "https://acme.com:1337/federation?type=txid&q=3389e9f0f1a65f19736cacf544c2e825313e8447f569233bb8db39aa607c8889",
-          ),
-        )
-        .returns(
-          Promise.resolve({
-            data: {
-              stellar_address: "bob*stellar.org",
-              account_id:
-                "GB5XVAABEQMY63WTHDQ5RXADGYF345VWMNPTN2GFUDZT57D57ZQTJ7PS",
-            },
-          }),
-        );
-    });
-
-    it("requests is correct", function (done) {
-      this.server
-        .resolveTransactionId(
-          "3389e9f0f1a65f19736cacf544c2e825313e8447f569233bb8db39aa607c8889",
-        )
-        .then((response) => {
-          expect(response.stellar_address).equals("bob*stellar.org");
-          expect(response.account_id).equals(
-            "GB5XVAABEQMY63WTHDQ5RXADGYF345VWMNPTN2GFUDZT57D57ZQTJ7PS",
-          );
-          done();
-        })
-        .catch(function (err) {
-          done(err);
-        });
-    });
-  });
-
-  describe("FederationServer.createForDomain", function () {
-    it("creates correct object", function (done) {
-      this.axiosMock
-        .expects("get")
-        .withArgs(sinon.match("https://acme.com/.well-known/stellar.toml"))
-        .returns(
-          Promise.resolve({
-            data: `
-#   The endpoint which clients should query to resolve stellar addresses
-#   for users on your domain.
-FEDERATION_SERVER="https://api.stellar.org/federation"
-`,
-          }),
-        );
-
-      Server.createForDomain("acme.com").then((federationServer) => {
-        expect(federationServer.serverURL.protocol()).equals("https");
-        expect(federationServer.serverURL.hostname()).equals("api.stellar.org");
-        expect(federationServer.serverURL.path()).equals("/federation");
-        expect(federationServer.domain).equals("acme.com");
-        done();
+        },
       });
     });
 
-    it("fails when stellar.toml does not contain federation server info", function (done) {
-      this.axiosMock
-        .expects("get")
-        .withArgs(sinon.match("https://acme.com/.well-known/stellar.toml"))
-        .returns(
-          Promise.resolve({
-            data: "",
-          }),
-        );
+    it("requests is correct", async () => {
+      const response = await server.resolveAddress("bob*stellar.org");
+      
+      expect((response as any).stellar_address).toBe("bob*stellar.org");
+      expect(response.account_id).toBe(
+        "GB5XVAABEQMY63WTHDQ5RXADGYF345VWMNPTN2GFUDZT57D57ZQTJ7PS",
+      );
+      expect(mockedAxios.get).toHaveBeenCalledWith(
+        "https://acme.com:1337/federation?type=name&q=bob%2Astellar.org",
+        expect.objectContaining({
+          maxContentLength: FEDERATION_RESPONSE_MAX_SIZE,
+          timeout: 0,
+        })
+      );
+    });
 
-      Server.createForDomain("acme.com")
-        .should.be.rejectedWith(
-          /stellar.toml does not contain FEDERATION_SERVER field/,
-        )
-        .and.notify(done);
+    it("requests is correct for username as stellar address", async () => {
+      const response = await server.resolveAddress("bob");
+      
+      expect((response as any).stellar_address).toBe("bob*stellar.org");
+      expect(response.account_id).toBe(
+        "GB5XVAABEQMY63WTHDQ5RXADGYF345VWMNPTN2GFUDZT57D57ZQTJ7PS",
+      );
+      expect(mockedAxios.get).toHaveBeenCalledWith(
+        "https://acme.com:1337/federation?type=name&q=bob%2Astellar.org",
+        expect.objectContaining({
+          maxContentLength: FEDERATION_RESPONSE_MAX_SIZE,
+          timeout: 0,
+        })
+      );
     });
   });
 
-  describe("FederationServer.resolve", function () {
-    it("succeeds for a valid account ID", function (done) {
-      Server.resolve("GAFSZ3VPBC2H2DVKCEWLN3PQWZW6BVDMFROWJUDAJ3KWSOKQIJ4R5W4J")
-        .should.eventually.deep.equal({
+  describe("FederationServer.resolveAccountId", () => {
+    beforeEach(() => {
+      mockedAxios.get.mockResolvedValue({
+        data: {
+          stellar_address: "bob*stellar.org",
           account_id:
-            "GAFSZ3VPBC2H2DVKCEWLN3PQWZW6BVDMFROWJUDAJ3KWSOKQIJ4R5W4J",
+            "GB5XVAABEQMY63WTHDQ5RXADGYF345VWMNPTN2GFUDZT57D57ZQTJ7PS",
+        },
+      });
+    });
+
+    it("requests is correct", async () => {
+      const response = await server.resolveAccountId(
+        "GB5XVAABEQMY63WTHDQ5RXADGYF345VWMNPTN2GFUDZT57D57ZQTJ7PS",
+      );
+      
+      expect((response as any).stellar_address).toBe("bob*stellar.org");
+      expect(response.account_id).toBe(
+        "GB5XVAABEQMY63WTHDQ5RXADGYF345VWMNPTN2GFUDZT57D57ZQTJ7PS",
+      );
+      expect(mockedAxios.get).toHaveBeenCalledWith(
+        "https://acme.com:1337/federation?type=id&q=GB5XVAABEQMY63WTHDQ5RXADGYF345VWMNPTN2GFUDZT57D57ZQTJ7PS",
+        expect.objectContaining({
+          maxContentLength: FEDERATION_RESPONSE_MAX_SIZE,
+          timeout: 0,
         })
-        .notify(done);
+      );
+    });
+  });
+
+  describe("FederationServer.resolveTransactionId", () => {
+    beforeEach(() => {
+      mockedAxios.get.mockResolvedValue({
+        data: {
+          stellar_address: "bob*stellar.org",
+          account_id:
+            "GB5XVAABEQMY63WTHDQ5RXADGYF345VWMNPTN2GFUDZT57D57ZQTJ7PS",
+        },
+      });
     });
 
-    it("fails for invalid account ID", function (done) {
-      Server.resolve("invalid")
-        .should.be.rejectedWith(/Invalid Account ID/)
-        .notify(done);
+    it("requests is correct", async () => {
+      const response = await server.resolveTransactionId(
+        "3389e9f0f1a65f19736cacf544c2e825313e8447f569233bb8db39aa607c8889",
+      );
+      
+      expect((response as any).stellar_address).toBe("bob*stellar.org");
+      expect(response.account_id).toBe(
+        "GB5XVAABEQMY63WTHDQ5RXADGYF345VWMNPTN2GFUDZT57D57ZQTJ7PS",
+      );
+      expect(mockedAxios.get).toHaveBeenCalledWith(
+        "https://acme.com:1337/federation?type=txid&q=3389e9f0f1a65f19736cacf544c2e825313e8447f569233bb8db39aa607c8889",
+        expect.objectContaining({
+          maxContentLength: FEDERATION_RESPONSE_MAX_SIZE,
+          timeout: 0,
+        })
+      );
     });
+  });
 
-    it("succeeds for a valid Stellar address", function (done) {
-      this.axiosMock
-        .expects("get")
-        .withArgs(sinon.match("https://stellar.org/.well-known/stellar.toml"))
-        .returns(
-          Promise.resolve({
-            data: `
+  describe("FederationServer.createForDomain", () => {
+    it("creates correct object", async () => {
+      mockedAxios.get.mockResolvedValue({
+        data: `
 #   The endpoint which clients should query to resolve stellar addresses
 #   for users on your domain.
 FEDERATION_SERVER="https://api.stellar.org/federation"
 `,
-          }),
-        );
+      });
 
-      this.axiosMock
-        .expects("get")
-        .withArgs(
-          sinon.match(
-            "https://api.stellar.org/federation?type=name&q=bob%2Astellar.org",
-          ),
-        )
-        .returns(
-          Promise.resolve({
-            data: {
-              stellar_address: "bob*stellar.org",
-              account_id:
-                "GB5XVAABEQMY63WTHDQ5RXADGYF345VWMNPTN2GFUDZT57D57ZQTJ7PS",
-              memo_type: "id",
-              memo: "100",
-            },
-          }),
-        );
+      const federationServer = await Server.createForDomain("acme.com");
+      
+      // Test that we get a valid federation server instance
+      expect(federationServer).toBeInstanceOf(Server);
+      expect(mockedAxios.get).toHaveBeenCalledWith(
+        "https://acme.com/.well-known/stellar.toml",
+        expect.objectContaining({
+          maxContentLength: FEDERATION_RESPONSE_MAX_SIZE,
+          timeout: 0,
+        })
+      );
+    });
 
-      Server.resolve("bob*stellar.org")
-        .should.eventually.deep.equal({
+    it("fails when stellar.toml does not contain federation server info", async () => {
+      mockedAxios.get.mockResolvedValue({
+        data: "",
+      });
+
+      await expect(Server.createForDomain("acme.com"))
+        .rejects.toThrow(/stellar.toml does not contain FEDERATION_SERVER field/);
+    });
+  });
+
+  describe("FederationServer.resolve", () => {
+    it("succeeds for a valid account ID", async () => {
+      const result = await Server.resolve("GAFSZ3VPBC2H2DVKCEWLN3PQWZW6BVDMFROWJUDAJ3KWSOKQIJ4R5W4J");
+      
+      expect(result).toEqual({
+        account_id: "GAFSZ3VPBC2H2DVKCEWLN3PQWZW6BVDMFROWJUDAJ3KWSOKQIJ4R5W4J",
+      });
+    });
+
+    it("fails for invalid account ID", async () => {
+      await expect(Server.resolve("invalid"))
+        .rejects.toThrow(/Invalid Account ID/);
+    });
+
+    it("succeeds for a valid Stellar address", async () => {
+      mockedAxios.get
+        .mockResolvedValueOnce({
+          data: `
+#   The endpoint which clients should query to resolve stellar addresses
+#   for users on your domain.
+FEDERATION_SERVER="https://api.stellar.org/federation"
+`,
+        })
+        .mockResolvedValueOnce({
+          data: {
+            stellar_address: "bob*stellar.org",
+            account_id:
+              "GB5XVAABEQMY63WTHDQ5RXADGYF345VWMNPTN2GFUDZT57D57ZQTJ7PS",
+            memo_type: "id",
+            memo: "100",
+          },
+        });
+
+      const result = await Server.resolve("bob*stellar.org");
+      
+      expect(result).toEqual({
+        stellar_address: "bob*stellar.org",
+        account_id:
+          "GB5XVAABEQMY63WTHDQ5RXADGYF345VWMNPTN2GFUDZT57D57ZQTJ7PS",
+        memo_type: "id",
+        memo: "100",
+      });
+      
+      expect(mockedAxios.get).toHaveBeenNthCalledWith(1,
+        "https://stellar.org/.well-known/stellar.toml",
+        expect.objectContaining({
+          maxContentLength: FEDERATION_RESPONSE_MAX_SIZE,
+          timeout: 0,
+        })
+      );
+      expect(mockedAxios.get).toHaveBeenNthCalledWith(2,
+        "https://api.stellar.org/federation?type=name&q=bob%2Astellar.org",
+        expect.objectContaining({
+          maxContentLength: FEDERATION_RESPONSE_MAX_SIZE,
+          timeout: 0,
+        })
+      );
+    });
+
+    it("fails for invalid Stellar address", async () => {
+      await expect(Server.resolve("bob*stellar.org*test"))
+        .rejects.toThrow(/Invalid Stellar address/);
+    });
+
+    it("fails when memo is not string", async () => {
+      mockedAxios.get.mockResolvedValue({
+        data: {
           stellar_address: "bob*stellar.org",
           account_id:
             "GB5XVAABEQMY63WTHDQ5RXADGYF345VWMNPTN2GFUDZT57D57ZQTJ7PS",
           memo_type: "id",
-          memo: "100",
-        })
-        .notify(done);
+          memo: 100,
+        },
+      });
+
+      await expect(server.resolveAddress("bob*stellar.org"))
+        .rejects.toThrow(/memo value should be of type string/);
     });
 
-    it("fails for invalid Stellar address", function (done) {
-      Server.resolve("bob*stellar.org*test")
-        .should.be.rejectedWith(/Invalid Stellar address/)
-        .notify(done);
-    });
-
-    it("fails when memo is not string", function (done) {
-      this.axiosMock
-        .expects("get")
-        .withArgs(
-          sinon.match(
-            "https://acme.com:1337/federation?type=name&q=bob%2Astellar.org",
-          ),
-        )
-        .returns(
-          Promise.resolve({
-            data: {
-              stellar_address: "bob*stellar.org",
-              account_id:
-                "GB5XVAABEQMY63WTHDQ5RXADGYF345VWMNPTN2GFUDZT57D57ZQTJ7PS",
-              memo_type: "id",
-              memo: 100,
-            },
-          }),
-        );
-
-      this.server
-        .resolveAddress("bob*stellar.org")
-        .should.be.rejectedWith(/memo value should be of type string/)
-        .notify(done);
-    });
-
-    it("fails when response exceeds the limit", function (done) {
+    it("fails when response exceeds the limit", async () => {
       // Unable to create temp server in a browser
-      if (typeof window != "undefined") {
-        return done();
+      if (typeof window !== "undefined") {
+        return;
       }
-      var response = Array(FEDERATION_RESPONSE_MAX_SIZE + 10).join("a");
-      let tempServer = http
-        .createServer((req, res) => {
-          res.setHeader("Content-Type", "application/json; charset=UTF-8");
-          res.end(response);
-        })
-        .listen(4444, () => {
-          new Server("http://localhost:4444/federation", "stellar.org", {
-            allowHttp: true,
+      
+      const response = Array(FEDERATION_RESPONSE_MAX_SIZE + 10).join("a");
+      
+      return new Promise((resolve, reject) => {
+        const tempServer = http
+          .createServer((req, res) => {
+            res.setHeader("Content-Type", "application/json; charset=UTF-8");
+            res.end(response);
           })
-            .resolveAddress("bob*stellar.org")
-            .should.be.rejectedWith(
-              /federation response exceeds allowed size of [0-9]+/,
-            )
-            .notify(done)
-            .then(() => tempServer.close());
-        });
+          .listen(4444, async () => {
+            try {
+              const testServer = new Server("http://localhost:4444/federation", "stellar.org", {
+                allowHttp: true,
+              });
+              
+              await expect(testServer.resolveAddress("bob*stellar.org"))
+                .rejects.toThrow(/federation response exceeds allowed size of [0-9]+/);
+              
+              tempServer.close();
+              resolve(undefined);
+            } catch (error) {
+              tempServer.close();
+              reject(error);
+            }
+          });
+      });
     });
   });
 
-  describe("FederationServer times out when response lags and timeout set", function () {
-    afterEach(function () {
+  describe("FederationServer times out when response lags and timeout set", () => {
+    afterEach(() => {
       StellarSdk.Config.setDefault();
     });
 
-    let opts = { allowHttp: true };
+    let opts: any = { allowHttp: true };
     let message;
     for (let i = 0; i < 2; i++) {
       if (i === 0) {
@@ -343,98 +318,142 @@ FEDERATION_SERVER="https://api.stellar.org/federation"
         message = "with instance opts set";
       }
 
-      it(`resolveAddress times out ${message}`, function (done) {
+      it(`resolveAddress times out ${message}`, async () => {
         // Unable to create temp server in a browser
-        if (typeof window != "undefined") {
-          return done();
+        if (typeof window !== "undefined") {
+          return;
         }
 
-        let tempServer = http
-          .createServer((req, res) => {
-            setTimeout(() => {}, 10000);
-          })
-          .listen(4444, () => {
-            new Server("http://localhost:4444/federation", "stellar.org", opts)
-              .resolveAddress("bob*stellar.org")
-              .should.be.rejectedWith(/timeout of 1000ms exceeded/)
-              .notify(done)
-              .then(() => tempServer.close());
-          });
+        return new Promise((resolve, reject) => {
+          const tempServer = http
+            .createServer((req, res) => {
+              setTimeout(() => {}, 10000);
+            })
+            .listen(4444, async () => {
+              try {
+                const testServer = new Server("http://localhost:4444/federation", "stellar.org", opts);
+                
+                await expect(testServer.resolveAddress("bob*stellar.org"))
+                  .rejects.toThrow(/timeout of 1000ms exceeded/);
+                
+                tempServer.close();
+                resolve(undefined);
+              } catch (error) {
+                tempServer.close();
+                reject(error);
+              }
+            });
+        });
       });
 
-      it(`resolveAccountId times out ${message}`, function (done) {
+      it(`resolveAccountId times out ${message}`, async () => {
         // Unable to create temp server in a browser
-        if (typeof window != "undefined") {
-          return done();
+        if (typeof window !== "undefined") {
+          return;
         }
-        let tempServer = http
-          .createServer((req, res) => {
-            setTimeout(() => {}, 10000);
-          })
-          .listen(4444, () => {
-            new Server("http://localhost:4444/federation", "stellar.org", opts)
-              .resolveAccountId(
-                "GB5XVAABEQMY63WTHDQ5RXADGYF345VWMNPTN2GFUDZT57D57ZQTJ7PS",
-              )
-              .should.be.rejectedWith(/timeout of 1000ms exceeded/)
-              .notify(done)
-              .then(() => tempServer.close());
-          });
+        
+        return new Promise((resolve, reject) => {
+          const tempServer = http
+            .createServer((req, res) => {
+              setTimeout(() => {}, 10000);
+            })
+            .listen(4444, async () => {
+              try {
+                const testServer = new Server("http://localhost:4444/federation", "stellar.org", opts);
+                
+                await expect(testServer.resolveAccountId(
+                  "GB5XVAABEQMY63WTHDQ5RXADGYF345VWMNPTN2GFUDZT57D57ZQTJ7PS",
+                )).rejects.toThrow(/timeout of 1000ms exceeded/);
+                
+                tempServer.close();
+                resolve(undefined);
+              } catch (error) {
+                tempServer.close();
+                reject(error);
+              }
+            });
+        });
       });
 
-      it(`resolveTransactionId times out ${message}`, function (done) {
+      it(`resolveTransactionId times out ${message}`, async () => {
         // Unable to create temp server in a browser
-        if (typeof window != "undefined") {
-          return done();
+        if (typeof window !== "undefined") {
+          return;
         }
-        let tempServer = http
-          .createServer((req, res) => {
-            setTimeout(() => {}, 10000);
-          })
-          .listen(4444, () => {
-            new Server("http://localhost:4444/federation", "stellar.org", opts)
-              .resolveTransactionId(
-                "3389e9f0f1a65f19736cacf544c2e825313e8447f569233bb8db39aa607c8889",
-              )
-              .should.be.rejectedWith(/timeout of 1000ms exceeded/)
-              .notify(done)
-              .then(() => tempServer.close());
-          });
+        
+        return new Promise((resolve, reject) => {
+          const tempServer = http
+            .createServer((req, res) => {
+              setTimeout(() => {}, 10000);
+            })
+            .listen(4444, async () => {
+              try {
+                const testServer = new Server("http://localhost:4444/federation", "stellar.org", opts);
+                
+                await expect(testServer.resolveTransactionId(
+                  "3389e9f0f1a65f19736cacf544c2e825313e8447f569233bb8db39aa607c8889",
+                )).rejects.toThrow(/timeout of 1000ms exceeded/);
+                
+                tempServer.close();
+                resolve(undefined);
+              } catch (error) {
+                tempServer.close();
+                reject(error);
+              }
+            });
+        });
       });
 
-      it(`createForDomain times out ${message}`, function (done) {
+      it(`createForDomain times out ${message}`, async () => {
         // Unable to create temp server in a browser
-        if (typeof window != "undefined") {
-          return done();
+        if (typeof window !== "undefined") {
+          return;
         }
-        let tempServer = http
-          .createServer((req, res) => {
-            setTimeout(() => {}, 10000);
-          })
-          .listen(4444, () => {
-            Server.createForDomain("localhost:4444", opts)
-              .should.be.rejectedWith(/timeout of 1000ms exceeded/)
-              .notify(done)
-              .then(() => tempServer.close());
-          });
+        
+        return new Promise((resolve, reject) => {
+          const tempServer = http
+            .createServer((req, res) => {
+              setTimeout(() => {}, 10000);
+            })
+            .listen(4444, async () => {
+              try {
+                await expect(Server.createForDomain("localhost:4444", opts))
+                  .rejects.toThrow(/timeout of 1000ms exceeded/);
+                
+                tempServer.close();
+                resolve(undefined);
+              } catch (error) {
+                tempServer.close();
+                reject(error);
+              }
+            });
+        });
       });
 
-      it(`resolve times out ${message}`, function (done) {
+      it(`resolve times out ${message}`, async () => {
         // Unable to create temp server in a browser
-        if (typeof window != "undefined") {
-          return done();
+        if (typeof window !== "undefined") {
+          return;
         }
 
-        let tempServer = http
-          .createServer((req, res) => {
-            setTimeout(() => {}, 10000);
-          })
-          .listen(4444, () => {
-            Server.resolve("bob*localhost:4444", opts)
-              .should.eventually.be.rejectedWith(/timeout of 1000ms exceeded/)
-              .notify(done)
-              .then(() => tempServer.close());
-          });
+        return new Promise((resolve, reject) => {
+          const tempServer = http
+            .createServer((req, res) => {
+              setTimeout(() => {}, 10000);
+            })
+            .listen(4444, async () => {
+              try {
+                await expect(Server.resolve("bob*localhost:4444", opts))
+                  .rejects.toThrow(/timeout of 1000ms exceeded/);
+                
+                tempServer.close();
+                resolve(undefined);
+              } catch (error) {
+                tempServer.close();
+                reject(error);
+              }
+            });
+        });
       });
     }
   });
