@@ -1,13 +1,19 @@
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import * as StellarSdk from '../../lib'
+
 const { Horizon } = StellarSdk;
 
-describe("server.js async transaction submission tests", function () {
+describe("server.js async transaction submission tests", () => {
   let keypair = StellarSdk.Keypair.random();
   let account = new StellarSdk.Account(keypair.publicKey(), "56199647068161");
+  let server: StellarSdk.Horizon.Server;
+  let transaction: StellarSdk.Transaction;
+  let blob: string;
 
-  beforeEach(function () {
-    this.server = new Horizon.Server("https://horizon-live.stellar.org:1337");
-    this.axiosMock = sinon.mock(Horizon.AxiosClient);
-    let transaction = new StellarSdk.TransactionBuilder(account, {
+  beforeEach(() => {
+    server = new Horizon.Server("https://horizon-live.stellar.org:1337");
+    
+    transaction = new StellarSdk.TransactionBuilder(account, {
       fee: StellarSdk.BASE_FEE,
       networkPassphrase: StellarSdk.Networks.TESTNET,
     })
@@ -23,56 +29,68 @@ describe("server.js async transaction submission tests", function () {
       .build();
     transaction.sign(keypair);
 
-    this.transaction = transaction;
-    this.blob = encodeURIComponent(
+    blob = encodeURIComponent(
       transaction.toEnvelope().toXDR().toString("base64"),
     );
   });
 
-  afterEach(function () {
-    this.axiosMock.verify();
-    this.axiosMock.restore();
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
-  it("sends an async transaction", function (done) {
-    this.axiosMock
-      .expects("post")
-      .withArgs(
-        "https://horizon-live.stellar.org:1337/transactions_async",
-        `tx=${this.blob}`,
-      )
-      .returns(Promise.resolve({ data: {} }));
+  it("sends an async transaction", async () => {
+    const mockResponse = {
+      data: {},
+      headers: {},
+      config: {},
+      status: 200,
+      statusText: 'OK'
+    };
+    const postSpy = vi.spyOn(Horizon.AxiosClient, 'post')
+      .mockResolvedValue(mockResponse);
 
-    this.server
-      .submitAsyncTransaction(this.transaction, { skipMemoRequiredCheck: true })
-      .then(() => done())
-      .catch((err) => done(err));
+    await server.submitAsyncTransaction(transaction, { skipMemoRequiredCheck: true });
+
+    expect(postSpy).toHaveBeenCalledWith(
+      "https://horizon-live.stellar.org:1337/transactions_async",
+      `tx=${blob}`,
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          "Content-Type": "application/x-www-form-urlencoded",
+        }),
+      }),
+    );
   });
-  it("sends an async transaction and gets a PENDING response", function (done) {
+  it("sends an async transaction and gets a PENDING response", async () => {
     const response = {
       tx_status: "PENDING",
       hash: "db2c69a07be57eb5baefbfbb72b95c7c20d2c4d6f2a0e84e7c27dd0359055a2f",
     };
 
-    this.axiosMock
-      .expects("post")
-      .withArgs(
-        "https://horizon-live.stellar.org:1337/transactions_async",
-        `tx=${this.blob}`,
-      )
-      .returns(Promise.resolve({ data: response }));
+    const mockResponse = {
+      data: response,
+      headers: {},
+      config: {},
+      status: 200,
+      statusText: 'OK'
+    };
+    const postSpy = vi.spyOn(Horizon.AxiosClient, 'post')
+      .mockResolvedValue(mockResponse);
 
-    this.server
-      .submitAsyncTransaction(this.transaction, { skipMemoRequiredCheck: true })
-      .then(function (res) {
-        expect(res).to.equal(response);
-        done();
-      })
-      .catch(function (err) {
-        done(err);
-      });
+    const res = await server.submitAsyncTransaction(transaction, { skipMemoRequiredCheck: true });
+
+    expect(postSpy).toHaveBeenCalledWith(
+      "https://horizon-live.stellar.org:1337/transactions_async",
+      `tx=${blob}`,
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          "Content-Type": "application/x-www-form-urlencoded",
+        }),
+      }),
+    );
+    expect(res).toEqual(response);
   });
-  it("sends an async transaction and gets a Problem response", function (done) {
+  it("sends an async transaction and gets a Problem response", async () => {
     const response = {
       type: "transaction_submission_exception",
       title: "Transaction Submission Exception",
@@ -89,39 +107,50 @@ describe("server.js async transaction submission tests", function () {
       },
     };
 
-    this.axiosMock
-      .expects("post")
-      .withArgs(
-        "https://horizon-live.stellar.org:1337/transactions_async",
-        `tx=${this.blob}`,
-      )
-      .returns(Promise.resolve({ data: response }));
+    const mockResponse = {
+      data: response,
+      headers: {},
+      config: {},
+      status: 500,
+      statusText: 'Internal Server Error'
+    };
+    const postSpy = vi.spyOn(Horizon.AxiosClient, 'post')
+      .mockResolvedValue(mockResponse);
 
-    this.server
-      .submitAsyncTransaction(this.transaction, { skipMemoRequiredCheck: true })
-      .then(function (res) {
-        expect(res).to.equal(response);
-        done();
-      })
-      .catch((err) => done(err));
-  });
-  it("sends an async transaction and check the request headers", function (done) {
-    this.axiosMock
-      .expects("post")
-      .withArgs(
-        "https://horizon-live.stellar.org:1337/transactions_async",
-        `tx=${this.blob}`,
-        sinon.match({
-          headers: sinon.match({
-            "Content-Type": "application/x-www-form-urlencoded",
-          }),
+    const res = await server.submitAsyncTransaction(transaction, { skipMemoRequiredCheck: true });
+
+    expect(postSpy).toHaveBeenCalledWith(
+      "https://horizon-live.stellar.org:1337/transactions_async",
+      `tx=${blob}`,
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          "Content-Type": "application/x-www-form-urlencoded",
         }),
-      )
-      .returns(Promise.resolve({ data: {} }));
+      }),
+    );
+    expect(res).toEqual(response);
+  });
+  it("sends an async transaction and check the request headers", async () => {
+    const mockResponse = {
+      data: {},
+      headers: {},
+      config: {},
+      status: 200,
+      statusText: 'OK'
+    };
+    const postSpy = vi.spyOn(Horizon.AxiosClient, 'post')
+      .mockResolvedValue(mockResponse);
 
-    this.server
-      .submitAsyncTransaction(this.transaction, { skipMemoRequiredCheck: true })
-      .then(() => done())
-      .catch((err) => done(err));
+    await server.submitAsyncTransaction(transaction, { skipMemoRequiredCheck: true });
+
+    expect(postSpy).toHaveBeenCalledWith(
+      "https://horizon-live.stellar.org:1337/transactions_async",
+      `tx=${blob}`,
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          "Content-Type": "application/x-www-form-urlencoded",
+        }),
+      }),
+    );
   });
 });
