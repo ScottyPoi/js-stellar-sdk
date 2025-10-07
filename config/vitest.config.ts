@@ -5,18 +5,24 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
-    setupFiles: ['./test/setup/vitest-setup.ts'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'html', 'lcov'],
       exclude: ['test/**', 'lib/**', 'dist/**', 'coverage/**'],
     },
-    testTimeout: 120000,
+    testTimeout: 20000,
   },
   resolve: {
     alias: {
-      '@': resolve(__dirname, './src'),
+      '@': resolve(__dirname, '../src'),
     },
+    extensions: ['.ts', '.tsx', '.js', '.jsx', '.json'],
+  },
+  esbuild: {
+    target: 'node14',
+  },
+  optimizeDeps: {
+    include: ['axios'],
   },
   define: {
     __USE_AXIOS__: true,
