@@ -1374,6 +1374,6 @@ describe("/liquidity_pools tests", () => {
 });
 
 // Helper function to deep-copy JSON responses.
-function copyJson(js) {
+function copyJson(js: any) {
   return JSON.parse(JSON.stringify(js));
 }

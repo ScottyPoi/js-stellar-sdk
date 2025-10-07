@@ -16,7 +16,7 @@ describe("horizon path tests", () => {
     vi.restoreAllMocks();
   });
 
-  function test_horizon_paths(serverUrl) {
+  function test_horizon_paths(serverUrl: string) {
     let server = new Horizon.Server(serverUrl);
 
     let randomResult: any = {
