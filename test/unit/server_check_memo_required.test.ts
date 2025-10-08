@@ -1,15 +1,18 @@
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import * as StellarSdk from '../../lib'
+
 const { Horizon } = StellarSdk;
 
-function buildTransaction(destination, operations = [], builderOpts = {}) {
+function buildTransaction(destination: string, operations: any[] = [], builderOpts: any = {}) {
   let txBuilderOpts = {
-    fee: 100,
+    fee: "100",
     networkPassphrase: StellarSdk.Networks.TESTNET,
     v1: true,
   };
   Object.assign(txBuilderOpts, builderOpts);
   let keypair = StellarSdk.Keypair.random();
   let account = new StellarSdk.Account(keypair.publicKey(), "56199647068161");
-  let transaction = new StellarSdk.TransactionBuilder(
+  let transactionBuilder = new StellarSdk.TransactionBuilder(
     account,
     txBuilderOpts,
   ).addOperation(
@@ -20,9 +23,9 @@ function buildTransaction(destination, operations = [], builderOpts = {}) {
     }),
   );
 
-  operations.forEach((op) => (transaction = transaction.addOperation(op)));
+  operations.forEach((op) => (transactionBuilder = transactionBuilder.addOperation(op)));
 
-  transaction = transaction.setTimeout(StellarSdk.TimeoutInfinite).build();
+  let transaction = transactionBuilder.setTimeout(StellarSdk.TimeoutInfinite).build();
   transaction.sign(keypair);
 
   if (builderOpts.feeBump) {
@@ -37,7 +40,7 @@ function buildTransaction(destination, operations = [], builderOpts = {}) {
   }
 }
 
-function buildAccount(id, data = {}) {
+function buildAccount(id: string, data: any = {}) {
   return {
     _links: {
       data: {
@@ -79,7 +82,7 @@ function buildAccount(id, data = {}) {
   };
 }
 
-function mockAccountRequest(axiosMock, id, status, data = {}) {
+function mockAccountRequest(id: string, status: number, data = {}) {
   let response;
 
   switch (status) {
@@ -98,128 +101,92 @@ function mockAccountRequest(axiosMock, id, status, data = {}) {
       break;
   }
 
-  axiosMock
-    .expects("get")
-    .withArgs(sinon.match(`https://horizon-testnet.stellar.org/accounts/${id}`))
-    .returns(response)
-    .once();
+  vi.spyOn(Horizon.AxiosClient, 'get').mockImplementationOnce((url: string) => {
+    if (url.includes(`/accounts/${id}`)) {
+      return response;
+    }
+    return Promise.reject(new Error(`Unexpected URL: ${url}`));
+  });
 }
 
-describe("server.js check-memo-required", function () {
-  beforeEach(function () {
-    this.server = new Horizon.Server("https://horizon-testnet.stellar.org");
-    this.axiosMock = sinon.mock(Horizon.AxiosClient);
+describe("server.js check-memo-required", () => {
+  let server: StellarSdk.Horizon.Server;
+
+  beforeEach(() => {
+    server = new Horizon.Server("https://horizon-testnet.stellar.org");
+    vi.clearAllMocks();
   });
 
-  afterEach(function () {
-    this.axiosMock.verify();
-    this.axiosMock.restore();
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
-  it("fails if memo is required", function (done) {
+  it("fails if memo is required", async () => {
     let accountId = "GAYHAAKPAQLMGIJYMIWPDWCGUCQ5LAWY4Q7Q3IKSP57O7GUPD3NEOSEA";
-    mockAccountRequest(this.axiosMock, accountId, 200, {
+    mockAccountRequest(accountId, 200, {
       "config.memo_required": "MQ==",
     });
     let transaction = buildTransaction(accountId);
 
-    this.server
-      .checkMemoRequired(transaction)
-      .then(
-        function () {
-          expect.fail("promise should have failed");
-        },
-        function (err) {
-          expect(err).to.be.instanceOf(StellarSdk.AccountRequiresMemoError);
-          expect(err.accountId).to.eq(accountId);
-          expect(err.operationIndex).to.eq(0);
-          done();
-        },
-      )
-      .catch(function (err) {
-        done(err);
-      });
+    try {
+      await server.checkMemoRequired(transaction);
+      expect.fail("promise should have failed");
+    } catch (err: any) {
+      expect(err).toBeInstanceOf(StellarSdk.AccountRequiresMemoError);
+      expect(err.accountId).toBe(accountId);
+      expect(err.operationIndex).toBe(0);
+    }
   });
 
-  it("fee bump - fails if memo is required", function (done) {
+  it("fee bump - fails if memo is required", async () => {
     let accountId = "GAYHAAKPAQLMGIJYMIWPDWCGUCQ5LAWY4Q7Q3IKSP57O7GUPD3NEOSEA";
-    mockAccountRequest(this.axiosMock, accountId, 200, {
+    mockAccountRequest(accountId, 200, {
       "config.memo_required": "MQ==",
     });
     let transaction = buildTransaction(accountId, [], { feeBump: true });
 
-    this.server
-      .checkMemoRequired(transaction)
-      .then(
-        function () {
-          expect.fail("promise should have failed");
-        },
-        function (err) {
-          expect(err).to.be.instanceOf(StellarSdk.AccountRequiresMemoError);
-          expect(err.accountId).to.eq(accountId);
-          expect(err.operationIndex).to.eq(0);
-          done();
-        },
-      )
-      .catch(function (err) {
-        done(err);
-      });
+    try {
+      await server.checkMemoRequired(transaction);
+      expect.fail("promise should have failed");
+    } catch (err: any) {
+      expect(err).toBeInstanceOf(StellarSdk.AccountRequiresMemoError);
+      expect(err.accountId).toBe(accountId);
+      expect(err.operationIndex).toBe(0);
+    }
   });
 
-  it("returns false if account doesn't exist", function (done) {
+  it("returns false if account doesn't exist", async () => {
     let accountId = "GAYHAAKPAQLMGIJYMIWPDWCGUCQ5LAWY4Q7Q3IKSP57O7GUPD3NEOSEA";
-    mockAccountRequest(this.axiosMock, accountId, 404, {});
+    mockAccountRequest(accountId, 404, {});
     let transaction = buildTransaction(accountId);
 
-    this.server
-      .checkMemoRequired(transaction)
-      .then(function () {
-        done();
-      })
-      .catch(function (err) {
-        done(err);
-      });
+    await expect(server.checkMemoRequired(transaction)).resolves.toBeUndefined();
   });
 
-  it("returns false if data field is not present", function (done) {
+  it("returns false if data field is not present", async () => {
     let accountId = "GAYHAAKPAQLMGIJYMIWPDWCGUCQ5LAWY4Q7Q3IKSP57O7GUPD3NEOSEA";
-    mockAccountRequest(this.axiosMock, accountId, 200, {});
+    mockAccountRequest(accountId, 200, {});
     let transaction = buildTransaction(accountId);
 
-    this.server
-      .checkMemoRequired(transaction)
-      .then(function () {
-        done();
-      })
-      .catch(function (err) {
-        done(err);
-      });
+    await expect(server.checkMemoRequired(transaction)).resolves.toBeUndefined();
   });
 
-  it("returns err with client errors", function (done) {
+  it("returns err with client errors", async () => {
     let accountId = "GAYHAAKPAQLMGIJYMIWPDWCGUCQ5LAWY4Q7Q3IKSP57O7GUPD3NEOSEA";
-    mockAccountRequest(this.axiosMock, accountId, 400, {});
+    mockAccountRequest(accountId, 400, {});
     let transaction = buildTransaction(accountId);
 
-    this.server
-      .checkMemoRequired(transaction)
-      .then(
-        function () {
-          expect.fail("promise should have failed");
-        },
-        function (err) {
-          expect(err).to.be.instanceOf(StellarSdk.NetworkError);
-          done();
-        },
-      )
-      .catch(function (err) {
-        done(err);
-      });
+    try {
+      await server.checkMemoRequired(transaction);
+      expect.fail("promise should have failed");
+    } catch (err: any) {
+      expect(err).toBeInstanceOf(StellarSdk.NetworkError);
+    }
   });
 
-  it("doesn't repeat account check if the destination is more than once", function (done) {
+  it("doesn't repeat account check if the destination is more than once", async () => {
     let accountId = "GAYHAAKPAQLMGIJYMIWPDWCGUCQ5LAWY4Q7Q3IKSP57O7GUPD3NEOSEA";
-    mockAccountRequest(this.axiosMock, accountId, 200, {});
+    mockAccountRequest(accountId, 200, {});
 
     let operations = [
       StellarSdk.Operation.payment({
@@ -231,19 +198,12 @@ describe("server.js check-memo-required", function () {
 
     let transaction = buildTransaction(accountId, operations);
 
-    this.server
-      .checkMemoRequired(transaction)
-      .then(function () {
-        done();
-      })
-      .catch(function (err) {
-        done(err);
-      });
+    await expect(server.checkMemoRequired(transaction)).resolves.toBeUndefined();
   });
 
-  it("other operations", function (done) {
+  it("other operations", async () => {
     let accountId = "GAYHAAKPAQLMGIJYMIWPDWCGUCQ5LAWY4Q7Q3IKSP57O7GUPD3NEOSEA";
-    mockAccountRequest(this.axiosMock, accountId, 200, {});
+    mockAccountRequest(accountId, 200, {});
 
     const destinations = [
       "GASGNGGXDNJE5C2O7LDCATIVYSSTZKB24SHYS6F4RQT4M4IGNYXB4TIV",
@@ -289,30 +249,17 @@ describe("server.js check-memo-required", function () {
       }),
     ];
 
-    destinations.forEach((d) => mockAccountRequest(this.axiosMock, d, 200, {}));
+    destinations.forEach((d) => mockAccountRequest(d, 200, {}));
 
     let transaction = buildTransaction(accountId, operations);
 
-    this.server
-      .checkMemoRequired(transaction)
-      .then(function () {
-        done();
-      })
-      .catch(function (err) {
-        done(err);
-      });
+    await expect(server.checkMemoRequired(transaction)).resolves.toBeUndefined();
   });
-  it("checks for memo required by default", function (done) {
+  it("checks for memo required by default", async () => {
     let accountId = "GAYHAAKPAQLMGIJYMIWPDWCGUCQ5LAWY4Q7Q3IKSP57O7GUPD3NEOSEA";
     let memo = StellarSdk.Memo.text("42");
     let transaction = buildTransaction(accountId, [], { memo });
-    this.server
-      .checkMemoRequired(transaction)
-      .then(function () {
-        done();
-      })
-      .catch(function (err) {
-        done(err);
-      });
+    
+    await expect(server.checkMemoRequired(transaction)).resolves.toBeUndefined();
   });
 });

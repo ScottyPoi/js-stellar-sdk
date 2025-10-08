@@ -1,1 +1,4 @@
 lib
+config
+test-nodejs.ts
+test-browser.ts
